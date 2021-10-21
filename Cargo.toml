@@ -1,0 +1,11 @@
+[package]
+name = "rkyv-incremental"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytecheck = "0.6.5"
+hexdump = "0.1.1"
+rkyv = { version = "0.7.19", features = ["validation"] }
