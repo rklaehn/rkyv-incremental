@@ -67,9 +67,9 @@ where
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         let prefix = self.prefix.serialize(serializer)?;
         let value = self.value.serialize(serializer)?;
-        // let children: &'static Arc<Vec<Tree<'static>>> =
-        //     unsafe { std::mem::transmute(&self.children) };
-        let children = self.children.serialize(serializer)?;
+        let children: &'static Arc<Vec<Tree<'static>>> =
+            unsafe { std::mem::transmute(&self.children) };
+        let children = children.serialize(serializer)?;
         Ok(TreeResolver {
             prefix,
             value,
@@ -85,9 +85,9 @@ where
     fn deserialize(&self, deserializer: &mut D) -> std::result::Result<Tree<'a>, D::Error> {
         let prefix: String = self.prefix.deserialize(deserializer)?;
         let value: Option<String> = self.value.deserialize(deserializer)?;
-        // let children: &'static ArchivedRc<ArchivedVec<ArchivedTree<'static>>, _> =
-        //     unsafe { std::mem::transmute(&self.children) };
-        let children: Arc<Vec<Tree<'a>>> = self.children.deserialize(deserializer)?;
+        let children: &'static ArchivedRc<ArchivedVec<ArchivedTree<'static>>, _> =
+            unsafe { std::mem::transmute(&self.children) };
+        let children: Arc<Vec<Tree<'a>>> = children.deserialize(deserializer)?;
         Ok(Tree {
             prefix,
             value,
