@@ -1,30 +1,33 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use rkyv::{
     archived_root, check_archived_root,
     de::{deserializers::SharedDeserializeMap, SharedDeserializeRegistry},
+    rc::{ArchivedRc, RcResolver},
     ser::{
         serializers::{AlignedSerializer, AllocSerializer, CompositeSerializer},
         ScratchSpace, Serializer, SharedSerializeRegistry,
     },
+    vec::ArchivedVec,
     Archive, Archived, Deserialize, Resolver, Serialize,
 };
-struct Tree {
+struct Tree<'a> {
     prefix: String,
     value: Option<String>,
-    children: Arc<Vec<Tree>>,
+    children: Arc<Vec<Tree<'a>>>,
+    _p: PhantomData<&'a ()>,
 }
 
-struct ArchivedTree {
+struct ArchivedTree<'a> {
     prefix: Archived<String>,
     value: Archived<Option<String>>,
-    children: Archived<Arc<Vec<Tree>>>,
+    children: Archived<Arc<Vec<Tree<'a>>>>,
 }
 
-struct TreeResolver {
+struct TreeResolver<'a> {
     prefix: Resolver<String>,
     value: Resolver<Option<String>>,
-    children: Resolver<Arc<Vec<Tree>>>,
+    children: Resolver<Arc<Vec<Tree<'a>>>>,
 }
 
 fn offset_from<T, U>(base: *const T, p: *const U) -> usize {
@@ -34,16 +37,17 @@ fn offset_from<T, U>(base: *const T, p: *const U) -> usize {
     p - base
 }
 
-impl Archive for Tree {
-    type Archived = ArchivedTree;
+impl<'a> Archive for Tree<'a> {
+    type Archived = ArchivedTree<'a>;
 
-    type Resolver = TreeResolver;
+    type Resolver = TreeResolver<'a>;
 
     unsafe fn resolve(&self, pos: usize, resolver: Self::Resolver, out: *mut Self::Archived) {
         let TreeResolver {
             prefix,
             value,
             children,
+            ..
         } = resolver;
         let ptr = &mut (*out).prefix;
         self.prefix
@@ -56,13 +60,15 @@ impl Archive for Tree {
     }
 }
 
-impl<S> Serialize<S> for Tree
+impl<'a, S> Serialize<S> for Tree<'a>
 where
     S: Serializer + SharedSerializeRegistry + ScratchSpace,
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         let prefix = self.prefix.serialize(serializer)?;
         let value = self.value.serialize(serializer)?;
+        // let children: &'static Arc<Vec<Tree<'static>>> =
+        //     unsafe { std::mem::transmute(&self.children) };
         let children = self.children.serialize(serializer)?;
         Ok(TreeResolver {
             prefix,
@@ -72,18 +78,21 @@ where
     }
 }
 
-impl<D> Deserialize<Tree, D> for ArchivedTree
+impl<'a, D> Deserialize<Tree<'a>, D> for ArchivedTree<'a>
 where
     D: SharedDeserializeRegistry + ?Sized,
 {
-    fn deserialize(&self, deserializer: &mut D) -> std::result::Result<Tree, D::Error> {
+    fn deserialize(&self, deserializer: &mut D) -> std::result::Result<Tree<'a>, D::Error> {
         let prefix: String = self.prefix.deserialize(deserializer)?;
         let value: Option<String> = self.value.deserialize(deserializer)?;
-        let children: Arc<Vec<Tree>> = self.children.deserialize(deserializer)?;
+        // let children: &'static ArchivedRc<ArchivedVec<ArchivedTree<'static>>, _> =
+        //     unsafe { std::mem::transmute(&self.children) };
+        let children: Arc<Vec<Tree<'a>>> = self.children.deserialize(deserializer)?;
         Ok(Tree {
             prefix,
             value,
             children,
+            _p: PhantomData,
         })
     }
 }
